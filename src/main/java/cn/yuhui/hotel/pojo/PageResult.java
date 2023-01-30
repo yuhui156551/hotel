@@ -4,6 +4,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 响应结果实体类
+ */
 @Data
 public class PageResult {
     private Long total;

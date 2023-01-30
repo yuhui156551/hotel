@@ -12,6 +12,7 @@ import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
@@ -35,15 +36,8 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         try {
             SearchRequest request = new SearchRequest("hotel");
             // DSL
-            // 获取搜索关键字
-            String key = params.getKey();
-            if (key == null || "".equals(key)) {
-                // 若没有关键字，进行全文检索
-                request.source().query(QueryBuilders.matchAllQuery());
-            } else {
-                // 否则，关键字检索
-                request.source().query(QueryBuilders.matchQuery("all", key));
-            }
+            // boolean查询
+            buildBasicQuery(params, request);
             // 分页
             int page = params.getPage();
             int size = params.getSize();
@@ -77,5 +71,39 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         }
         // 封装返回
         return new PageResult(total, hotels);
+    }
+
+    private void buildBasicQuery(RequestParams params, SearchRequest request) {
+        // 构建BooleanQuery
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        // 关键字搜索
+        String key = params.getKey();
+        if (key == null || "".equals(key)) {
+            boolQuery.must(QueryBuilders.matchAllQuery());
+        } else {
+            boolQuery.must(QueryBuilders.matchQuery("all", key));
+        }
+        // 城市条件
+        if (params.getCity() != null && !"".equals(params.getCity())) {
+            boolQuery.filter(QueryBuilders.termQuery("city", params.getCity()));
+        }
+        // 品牌条件
+        if (params.getBrand() != null && !"".equals(params.getBrand())) {
+            boolQuery.filter(QueryBuilders.termQuery("brand", params.getBrand()));
+        }
+        // 星级条件
+        if (params.getStarName() != null && !"".equals(params.getStarName())) {
+            boolQuery.filter(QueryBuilders.termQuery("starName", params.getStarName()));
+        }
+        // 价格
+        if (params.getMinPrice() != null && params.getMaxPrice() != null) {
+            boolQuery.filter(QueryBuilders
+                    .rangeQuery("price")
+                    .gte(params.getMinPrice())
+                    .lte(params.getMaxPrice())
+            );
+        }
+        // 放入source
+        request.source().query(boolQuery);
     }
 }
