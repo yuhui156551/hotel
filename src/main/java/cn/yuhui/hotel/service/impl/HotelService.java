@@ -16,6 +16,8 @@ import org.elasticsearch.common.geo.GeoPoint;
 import org.elasticsearch.common.unit.DistanceUnit;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.sort.SortBuilders;
@@ -120,7 +122,44 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
                     .lte(params.getMaxPrice())
             );
         }
+        // 算分控制
+        /**
+         * 添加标记：
+         * POST /hotel/_update/2056126831
+         * {
+         *     "doc": {
+         *         "isAD": true
+         *     }
+         * }
+         * POST /hotel/_update/1989806195
+         * {
+         *     "doc": {
+         *         "isAD": true
+         *     }
+         * }
+         * POST /hotel/_update/2056105938
+         * {
+         *     "doc": {
+         *         "isAD": true
+         *     }
+         * }
+         */
+        FunctionScoreQueryBuilder functionScoreQuery =
+                QueryBuilders.functionScoreQuery(
+                        // 原始查询，相关性算分的查询
+                        boolQuery,
+                        // function score的数组
+                        new FunctionScoreQueryBuilder.FilterFunctionBuilder[]{
+                                // 其中的一个function score 元素
+                                new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                                        // 过滤条件
+                                        QueryBuilders.termQuery("isAD", true),
+                                        // 算分函数
+                                        ScoreFunctionBuilders.weightFactorFunction(10)
+                                )
+                        });
+        request.source().query(functionScoreQuery);
         // 放入source
-        request.source().query(boolQuery);
+//        request.source().query(boolQuery);
     }
 }
