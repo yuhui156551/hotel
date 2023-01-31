@@ -26,6 +26,10 @@ import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.search.suggest.Suggest;
+import org.elasticsearch.search.suggest.SuggestBuilder;
+import org.elasticsearch.search.suggest.SuggestBuilders;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -81,7 +85,7 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
             buildAggregation(request);
             // 发送请求
             SearchResponse response = client.search(request, RequestOptions.DEFAULT);
-            // 解析结果
+            // 解析经过过滤的结果
             Aggregations aggregations = response.getAggregations();
             Map<String, List<String>> result = new HashMap<>();
             // 根据名称，获取结果
@@ -93,6 +97,39 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
             result.put("星级", starList);
             // 返回结果
             return result;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public List<String> getSuggestions(String prefix) {
+        try {
+            SearchRequest request = new SearchRequest("hotel");
+            // DSL
+            request.source().suggest(new SuggestBuilder().addSuggestion(
+                    "suggestions",
+                    SuggestBuilders.completionSuggestion("suggestion")// 补全字段
+                            .prefix(prefix)// 关键字
+                            .skipDuplicates(true)
+                            .size(10)
+            ));
+            // 发起请求
+            SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+            // 解析结果
+            Suggest suggest = response.getSuggest();
+            // 根据补全查询名称，获取补全结果
+            CompletionSuggestion suggestions = suggest.getSuggestion("suggestions");
+            // 获取options
+            List<CompletionSuggestion.Entry.Option> options = suggestions.getOptions();
+            // 遍历
+            List<String> list = new ArrayList<>(options.size());
+            for (CompletionSuggestion.Entry.Option option : options) {
+                // 获取一个option的text，也就是补全的词条
+                String text = option.getText().toString();
+                list.add(text);
+            }
+            return list;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

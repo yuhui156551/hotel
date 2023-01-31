@@ -18,4 +18,9 @@ public interface IHotelService extends IService<Hotel> {
      * 聚合
      */
     Map<String, List<String>> getFilters(RequestParams params);
+
+    /**
+     * 获取补全词条
+     */
+    List<String> getSuggestions(String prefix);
 }
