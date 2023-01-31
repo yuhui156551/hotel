@@ -20,6 +20,10 @@ import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
 import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.AggregationBuilder;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.stereotype.Service;
@@ -27,7 +31,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHotelService {
@@ -65,7 +71,75 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         }
     }
 
-    // 结果解析
+    @Override
+    public Map<String, List<String>> getFilters(RequestParams params) {
+        try {
+            SearchRequest request = new SearchRequest("hotel");
+            buildBasicQuery(params, request);
+            request.source().size(0);
+            // 聚合
+            buildAggregation(request);
+            // 发送请求
+            SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+            // 解析结果
+            Aggregations aggregations = response.getAggregations();
+            Map<String, List<String>> result = new HashMap<>();
+            // 根据名称，获取结果
+            List<String> brandList = getAggByName(aggregations, "brandAgg");
+            result.put("品牌", brandList);
+            List<String> cityList = getAggByName(aggregations, "cityAgg");
+            result.put("城市", cityList);
+            List<String> starList = getAggByName(aggregations, "starAgg");
+            result.put("星级", starList);
+            // 返回结果
+            return result;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * 根据名称获取对应结果
+     */
+    private List<String> getAggByName(Aggregations aggregations, String aggName) {
+        // 根据聚合名称获取聚合结果
+        Terms brandTerms = aggregations.get(aggName);
+        // 获取buckets
+        List<? extends Terms.Bucket> buckets = brandTerms.getBuckets();
+        // 遍历
+        List<String> brandList = new ArrayList<>();
+        for (Terms.Bucket bucket : buckets) {
+            // 获取key，也就是品牌等信息
+            String key = bucket.getKeyAsString();
+            brandList.add(key);
+        }
+        return brandList;
+    }
+
+    /**
+     * 限定范围的聚合
+     */
+    private void buildAggregation(SearchRequest request) {
+        // 品牌分组
+        request.source().aggregation(AggregationBuilders
+                .terms("brandAgg")
+                .field("brand")
+                .size(100));
+        // 城市分组
+        request.source().aggregation(AggregationBuilders
+                .terms("cityAgg")
+                .field("city")
+                .size(100));
+        // 星级分组
+        request.source().aggregation(AggregationBuilders
+                .terms("starAgg")
+                .field("starName")
+                .size(100));
+    }
+
+    /**
+     * 解析结果
+     */
     private PageResult handleResponse(SearchResponse response) {
         // 解析响应
         SearchHits searchHits = response.getHits();
@@ -92,6 +166,9 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
         return new PageResult(total, hotels);
     }
 
+    /**
+     * query
+     */
     private void buildBasicQuery(RequestParams params, SearchRequest request) {
         // 构建BooleanQuery
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
